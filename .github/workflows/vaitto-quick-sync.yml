@@ -1,0 +1,31 @@
+name: Supplier → Vaitto QUICK (EU-WAR-3) — price/stock only
+
+on:
+  schedule:
+    - cron: '10 * * * *'   # every 60 minutes, offset from the full sync (:40)
+  workflow_dispatch:
+
+jobs:
+  sync-quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Run quick sync
+        env:
+          SUPPLIER_PRICE_FEED:           ${{ secrets.SUPPLIER_PRICE_FEED }}
+          SUPPLIER_FALLBACK_FEED:        ${{ secrets.SUPPLIER_FALLBACK_FEED }}
+          PRICE_FEED:                       ${{ secrets.SUPPLIER_PRICE_FEED }}
+          SUPPLIER_REPO_PATH:            '.'
+          SHOPIFY_DOMAIN:              ${{ secrets.SHOPIFY_DOMAIN }}
+          SHOPIFY_TOKEN:               ${{ secrets.SHOPIFY_TOKEN }}
+          IMPORT_HOOK_SECRET:          ${{ secrets.IMPORT_HOOK_SECRET }}
+          VAITTO_HOOK_URL:             https://vaitto.com/api/public/hooks/vaitto-product-import
+          VAITTO_SUPABASE_URL:         ${{ secrets.VAITTO_SUPABASE_URL }}
+          VAITTO_SUPABASE_SERVICE_KEY: ${{ secrets.VAITTO_SUPABASE_SERVICE_KEY }}
+          # VAITTO_DRY_RUN: '1'
+        run: python sync_vaitto_quick.py

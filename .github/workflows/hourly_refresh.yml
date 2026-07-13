@@ -1,0 +1,33 @@
+name: Supplier Tier 2 — Hourly Refresh
+
+on:
+  schedule:
+    - cron: "30 * * * *"       # every hour at :30
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Apply to Shopify (otherwise dry run)"
+        type: boolean
+        default: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run Tier 2 refresh
+        env:
+          SHOPIFY_DOMAIN: ${{ secrets.SHOPIFY_DOMAIN }}
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          SUPPLIER_LOCATION_ID: ${{ secrets.SUPPLIER_LOCATION_ID }}
+          SUPPLIER_PRICE_FEED: ${{ secrets.SUPPLIER_PRICE_FEED }}
+        run: |
+          if [ "${{ github.event_name == 'schedule' || github.event.inputs.commit == 'true' }}" = "true" ]; then
+            python3 hourly_refresh.py --commit
+          else
+            python3 hourly_refresh.py
+          fi
