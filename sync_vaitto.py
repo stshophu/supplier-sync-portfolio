@@ -46,6 +46,7 @@ def run():
 
     n = 0
     skipped_no_cost = 0
+    total_variants = 0
     for code, group_df in grouped:
         if LIMIT and n >= LIMIT:
             break
@@ -72,8 +73,30 @@ def run():
         supplier_price = pf.get("cost") if pf else None
         rrp = pf.get("rrp") if pf else None
 
+        # Variant detail is already built for the Shopify payload -- one entry
+        # per size, carrying its own SKU, option1 (size) and barcode -- and
+        # metas holds the matching per-size quantity in the same order. Both
+        # were being collapsed into stock_qty and discarded, which left every
+        # Vaitto product without variants and therefore unusable in a Shopify
+        # export (hollow rows, no SKU, no option values).
+        vaitto_variants = []
+        for v, m in zip(p.get("variants") or [], metas):
+            v_sku = str(v.get("sku") or m.get("sku") or "").strip()
+            if not v_sku:
+                continue
+            size = str(v.get("option1") or "").strip()
+            vaitto_variants.append({
+                "sku":       v_sku,
+                "size":      size or None,
+                "colour":    None,   # the price feed carries no colour column
+                "barcode":   (str(v.get("barcode")).strip() or None)
+                             if v.get("barcode") else None,
+                "stock_qty": max(0, int(m.get("qty") or 0)),
+            })
+        total_variants += len(vaitto_variants)
+
         log.info(f"[{n}]  {code}  '{p['title']}'  stock={stock_qty}  "
-                 f"rrp={rrp}  brand={brand!r}")
+                 f"rrp={rrp}  brand={brand!r}  variants={len(vaitto_variants)}")
         session.upsert(
             sku=str(code),
             name=p["title"],
@@ -88,10 +111,12 @@ def run():
             description=p.get("body_html") or None,
             image_url=images[0] if images else None,
             images=images[:10],
+            variants=vaitto_variants or None,
         )
 
     session.finish()
     log.info(f"  skipped groups (no cost resolved from parallel report): {skipped_no_cost}")
+    log.info(f"  variants sent: {total_variants}")
 
 if __name__ == "__main__":
     run()
