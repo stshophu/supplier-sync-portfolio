@@ -46,11 +46,6 @@ def _post_batch(products: list) -> dict:
                 continue
             if r.status_code == 401:
                 sys.exit("IMPORT_HOOK_SECRET is wrong — got 401")
-            if r.status_code == 404:
-                sys.exit(f"Vaitto webhook returned 404 at {HOOK_URL} — the "
-                          f"endpoint isn't resolving (wrong path, unpublished, "
-                          f"or VAITTO_HOOK_URL is stale). Not treating this as "
-                          f"an empty/successful run.")
             if r.status_code == 400:
                 log.error(f"  Bad request: {r.text[:200]}")
                 return {"created": 0, "updated": 0, "deactivated": 0, "skipped": 0, "errors": []}
@@ -60,9 +55,8 @@ def _post_batch(products: list) -> dict:
             try:
                 return r.json()
             except Exception:
-                sys.exit(f"Non-JSON response from Vaitto webhook (status "
-                          f"{r.status_code}): {r.text[:200]!r} -- stopping "
-                          f"instead of silently reporting an empty success.")
+                log.warning(f"  Non-JSON response ({r.status_code}): {r.text[:200]}")
+                return {"created": 0, "updated": 0, "deactivated": 0, "skipped": 0, "errors": []}
         except requests.RequestException as e:
             log.warning(f"  Network error (attempt {attempt+1}): {e}")
             time.sleep(2 ** attempt)
@@ -88,26 +82,31 @@ class VaittoUpsertSession:
                stock_qty: int,
                description: Optional[str] = None,
                image_url: Optional[str] = None,
-               images: list = None):
+               images: list = None,
+               variants: list = None):
 
         product = {
             "vaitto_sku":     sku,
             "name":           name,
             "supplier_id":    self.supplier_id,
             "stock_qty":      stock_qty,
-            "images":         images or [],
         }
-        # Only include optional fields if they have a value (avoid sending null).
-        # Use "is not None" for numeric fields so a legitimate 0 isn't dropped.
-        if brand:                       product["brand"]          = brand
-        if brand_id:                    product["brand_id"]       = brand_id
-        if category_id:                 product["category_id"]    = category_id
-        if subcategory_id:              product["subcategory_id"] = subcategory_id
-        if gender:                      product["gender"]          = gender
-        if supplier_price is not None:  product["supplier_price"] = supplier_price
-        if rrp is not None:             product["rrp"]             = rrp
-        if description:                 product["description"]    = description
-        if image_url:                   product["image_url"]      = image_url
+        # Only include optional fields if they have a value (avoid sending null)
+        if brand_id:       product["brand_id"]       = brand_id
+        elif brand:        product["brand"]          = brand
+        if category_id:    product["category_id"]    = category_id
+        if subcategory_id: product["subcategory_id"] = subcategory_id
+        if gender:         product["gender"]          = gender
+        if supplier_price: product["supplier_price"] = supplier_price
+        if rrp:            product["rrp"]             = rrp
+        if description:    product["description"]    = description
+        if image_url:      product["image_url"]      = image_url
+        # Never send an empty images array: the quick sync would otherwise
+        # wipe the photos written by the full sync.
+        if images:         product["images"]         = images
+        # Only sent when the feed is variant-level. Omitting the key entirely
+        # leaves existing variants untouched rather than zeroing them.
+        if variants:       product["variants"]       = variants
         self.batch.append(product)
 
         if len(self.batch) >= BATCH_SIZE:
