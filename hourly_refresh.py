@@ -51,7 +51,7 @@ import pandas as pd
 from supplier_common import (log, load_feed, req, API, find_variant_by_sku, get_location_id,
                            set_inventory_cost, set_inventory_quantity, add_tag, remove_tag)
 from pricing import price_decision, _round5
-from translations import (translate_category, translate_gender,
+from translations import (translate_category, translate_gender, build_product_type,
                                  is_header_junk)
 
 # Must match PENDING_TAG in catalog_import.py -- products created there are
@@ -170,7 +170,8 @@ def create_placeholder(sku, row, brand, rrp, qty):
         variant["barcode"] = gtin
 
     payload = {"product": {
-        "title": title, "vendor": brand, "product_type": product_type,
+        "title": title, "vendor": brand,
+        "product_type": build_product_type(gender_en, product_type),
         "status": "active", "tags": ", ".join(tags),
         "options": [{"name": "Size"}], "variants": [variant],
     }}

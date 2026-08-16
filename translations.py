@@ -43,6 +43,22 @@ def translate_gender(value):
     return GENDER_MAP.get(str(value).strip().lower(), str(value).strip())
 
 
+# ── SHOPIFY product_type ────────────────────────────────────────────────
+# Shopify product_type is what downstream channel category mappers read
+# (Glami, Allegro, Google). A bare type like "Trousers" leaves them with no
+# gender to work from, so prefix it: "Women Trousers".
+# Kids/Unisex keep their own prefix rather than being forced into Men/Women.
+_PRODUCT_TYPE_GENDER = {"Men", "Women", "Kids", "Unisex"}
+
+def build_product_type(gender_en, product_type):
+    """Return "{Gender} {Type}", or the bare type when gender is unknown."""
+    if not product_type:
+        return product_type
+    if gender_en in _PRODUCT_TYPE_GENDER:
+        return f"{gender_en} {product_type}"
+    return product_type
+
+
 # ── CATEGORY (primary type -> Shopify product_type) ─────────────────────
 CATEGORY_MAP = {
     "abbigliamento": "Clothing", "accessori": "Accessories",

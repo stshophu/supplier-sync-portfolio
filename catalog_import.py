@@ -106,7 +106,7 @@ def default_weight_kg(product_type: str = "", title: str = "") -> float:
                 return kg
     return 0.8  # fallback
 from pricing import price_decision
-from translations import (translate_gender, translate_category,
+from translations import (translate_gender, translate_category, build_product_type,
                                  translate_colour, translate_material,
                                  is_header_junk)
 
@@ -418,7 +418,8 @@ def _finalize_group(variants, metas, statuses, title, body, brand,
 
     payload = {"product": {
         "title": title, "body_html": body, "vendor": brand,
-        "product_type": product_type, "status": product_status,
+        "product_type": build_product_type(gender_en, product_type),
+        "status": product_status,
         "tags": ", ".join(tags), "options": [{"name": "Size"}],
         "variants": variants, "images": images,
     }}
