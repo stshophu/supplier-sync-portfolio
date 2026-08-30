@@ -40,8 +40,13 @@ def run():
 
     parallel_fb = load_parallel_fallback()
     log.info(f"  parallel report styles (cost source): {len(parallel_fb)}")
-    text_lookup = load_catalog_text_lookup()
-    log.info(f"  CatalogFeed English-text matches available: {len(text_lookup)} styles")
+    # English text is built from the price feed itself (Italian source,
+    # dictionary for titles/composition, machine translation for prose).
+    # The old CatalogFeed — a Google Sheets export — has been returning 400
+    # since at least 29.08.2026 and failed silently, which left every product
+    # with a synthesised title and no description.
+    text_lookup = build_text_lookup(k, translate_colour, translate_material)
+    log.info(f"  English text built from the price feed: {len(text_lookup)} styles")
     session     = VaittoUpsertSession(SUPPLIER_ID, SUPPLIER_NAME)
 
     n = 0
