@@ -13,6 +13,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from catalog_import import (load_feed, load_parallel_fallback,
                             load_catalog_text_lookup, build_product_group_price_feed)
+from vaitto_text import build_text_lookup
+from translations import translate_colour, translate_material
 from translations import translate_gender
 from vaitto_upsert import VaittoUpsertSession
 from vaitto_taxonomy import resolve_brand, resolve_category, resolve_subcategory, resolve_gender, load_brands
