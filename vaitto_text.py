@@ -264,7 +264,13 @@ def parse_description(raw: str) -> dict[str, str]:
         made_in = m.group(1).strip().title()
         text = text[: m.start()] + text[m.end():]
 
-    prose = re.sub(r"\n{2,}", "\n", text).strip()
+    # Internal codes also appear mid-line ("… 4 cm - SKU Interno: 23NOV56"),
+    # where the line-based filter above cannot see them. Left in place they get
+    # translated too, and surface as "Inner sku:23NOV56" in the storefront.
+    # SKU markers only ever trail the copy, so cut everything from the first one.
+    text = re.split(r"[-–—\s]*\bSKU\b.*", text, flags=re.I | re.S)[0]
+
+    prose = re.sub(r"\n{2,}", "\n", text).strip(" \n-–—\t")
     return {"prose": prose, "composition": composition, "made_in": made_in}
 
 
