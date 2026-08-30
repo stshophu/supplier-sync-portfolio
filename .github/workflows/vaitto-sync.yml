@@ -27,6 +27,9 @@ jobs:
           SHOPIFY_TOKEN:        ${{ secrets.SHOPIFY_TOKEN }}
           IMPORT_HOOK_SECRET:   ${{ secrets.IMPORT_HOOK_SECRET }}
           VAITTO_HOOK_URL:      https://vaitto.com/api/public/hooks/vaitto-product-import
+          VAITTO_SUPABASE_URL:         ${{ secrets.VAITTO_SUPABASE_URL }}
+          VAITTO_SUPABASE_SERVICE_KEY: ${{ secrets.VAITTO_SUPABASE_SERVICE_KEY }}
+          MYMEMORY_EMAIL:              contact@vaitto.com
           # VAITTO_DRY_RUN: '1'
           # LIMIT: '10'
         run: python sync_vaitto.py
