@@ -207,6 +207,15 @@ SEASON_EN = {"primavera/estate": "Spring/Summer", "autunno/inverno": "Fall/Winte
 _DROP_LINE = re.compile(r"^\s*(SKU\s+Interno|SKU\s+Brand)\s*:", re.I)
 _COMPOSIZIONE = re.compile(r"Composizione\s*:\s*([^\n]+)", re.I)
 _MADE_IN = re.compile(r"\bMade\s+in\s+([A-Za-zÀ-ù\s]+?)\s*\.", re.I)
+# Internal codes trail the copy in several shapes: "- SKU Interno: 23NOV56",
+# " sku:23NOV56", and — with no separator at all — "-InnerSku:22AP56-59".
+# The last form has no word boundary before "Sku", so \bSKU\b alone misses it.
+_SKU_TAIL = re.compile(r"[-–—\s]*(?:\bSKU\b|[A-Za-z]*SKU(?=\s*:)).*", re.I | re.S)
+
+
+def strip_sku_tail(text: str) -> str:
+    """Drop everything from the first internal-code marker onwards."""
+    return _SKU_TAIL.split(text or "", maxsplit=1)[0].strip(" \n-–—\t")
 
 
 def _title_case(s: str) -> str:
@@ -268,7 +277,7 @@ def parse_description(raw: str) -> dict[str, str]:
     # where the line-based filter above cannot see them. Left in place they get
     # translated too, and surface as "Inner sku:23NOV56" in the storefront.
     # SKU markers only ever trail the copy, so cut everything from the first one.
-    text = re.split(r"[-–—\s]*\bSKU\b.*", text, flags=re.I | re.S)[0]
+    text = strip_sku_tail(text)
 
     prose = re.sub(r"\n{2,}", "\n", text).strip(" \n-–—\t")
     return {"prose": prose, "composition": composition, "made_in": made_in}
@@ -487,8 +496,8 @@ def load_supplied_text() -> dict[str, dict[str, str]]:
         code = (r.get("code") or "").strip()
         if not code:
             continue
-        out[code] = {"title": (r.get("title_en") or "").strip(),
-                     "description": (r.get("description_en") or "").strip()}
+        out[code] = {"title": strip_sku_tail(r.get("title_en") or ""),
+                     "description": strip_sku_tail(r.get("description_en") or "")}
     log.info("  supplied English text: %d styles", len(out))
     return out
 
