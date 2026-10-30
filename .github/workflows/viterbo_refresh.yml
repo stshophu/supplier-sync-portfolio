@@ -1,0 +1,51 @@
+name: Viterbo — Stock & Price Refresh
+
+# The code lives in the private repo stshophu/viterbo-sync; this public repo
+# only runs it (free Actions minutes). Logs show counts only.
+# Every 20 minutes: GitHub skips/delays scheduled runs, so this keeps the
+# real gap close to an hour.
+
+on:
+  schedule:
+    - cron: "5,25,45 * * * *"
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Apply to Shopify (otherwise dry run)"
+        type: boolean
+        default: false
+      force:
+        description: "Override the 'too many zeroed at once' safety stop"
+        type: boolean
+        default: false
+
+concurrency:
+  group: viterbo-shopify
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: stshophu/viterbo-sync
+          token: ${{ secrets.PRIVATE_CODE_TOKEN }}
+          path: viterbo
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q -r viterbo/requirements.txt
+      - name: Run refresh
+        working-directory: viterbo
+        env:
+          SHOPIFY_DOMAIN: ${{ secrets.SHOPIFY_DOMAIN }}
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          VITERBO_FEED_URL: ${{ secrets.VITERBO_FEED_URL }}
+          VITERBO_QUIET: "1"
+        run: |
+          ARGS=""
+          if [ "${{ github.event_name == 'schedule' || github.event.inputs.commit == 'true' }}" = "true" ]; then ARGS="--commit"; fi
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then ARGS="$ARGS --force"; fi
+          python3 viterbo_hourly_refresh.py $ARGS

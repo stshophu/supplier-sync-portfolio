@@ -1,0 +1,49 @@
+name: Viterbo — Daily Import of New Products
+
+# Code: private repo stshophu/viterbo-sync. Logs show counts only.
+# Idle until the repo variable VITERBO_IMPORT_ENABLED is "true".
+# Daily cap: repo variable VITERBO_DAILY_CAP (default 100).
+
+on:
+  schedule:
+    - cron: "10 4 * * *"
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Create in Shopify (otherwise dry run)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: viterbo-shopify
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: stshophu/viterbo-sync
+          token: ${{ secrets.PRIVATE_CODE_TOKEN }}
+          path: viterbo
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q -r viterbo/requirements.txt
+      - name: Run import
+        working-directory: viterbo
+        env:
+          SHOPIFY_DOMAIN: ${{ secrets.SHOPIFY_DOMAIN }}
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          VITERBO_FEED_URL: ${{ secrets.VITERBO_FEED_URL }}
+          VITERBO_IMPORT_ENABLED: ${{ vars.VITERBO_IMPORT_ENABLED }}
+          VITERBO_DAILY_CAP: ${{ vars.VITERBO_DAILY_CAP }}
+          VITERBO_QUIET: "1"
+        run: |
+          if [ "${{ github.event_name == 'schedule' || github.event.inputs.commit == 'true' }}" = "true" ]; then
+            python3 viterbo_import.py --commit
+          else
+            python3 viterbo_import.py
+          fi
