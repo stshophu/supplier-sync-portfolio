@@ -402,8 +402,8 @@ def build_product_group_price_feed(group_df, parallel_fb, text_lookup):
         v = {"sku": sku, "price": f"{price:.2f}", "option1": size,
              "inventory_management": "shopify",
              "weight": wkg, "weight_unit": "kg"}
-        if compare_at:
-            v["compare_at_price"] = f"{compare_at:.2f}"
+        # No compare-at price: the Loxuno "RRP" is the supplier's own shop price,
+        # which Google Merchant Center treats as a misleading discount.
         if valid_gtin(gtin):
             v["barcode"] = gtin
         variants.append(v)
@@ -507,9 +507,7 @@ def upsert_group(item):
             for v in prod["variants"]:
                 ex = by_sku.get(v["sku"])
                 if ex:
-                    upd = {"id": ex["id"], "price": v["price"]}
-                    if "compare_at_price" in v:
-                        upd["compare_at_price"] = v["compare_at_price"]
+                    upd = {"id": ex["id"], "price": v["price"], "compare_at_price": None}
                     req("PUT", f"{API}/variants/{ex['id']}.json",
                         json={"variant": upd})
                     time.sleep(0.4)
