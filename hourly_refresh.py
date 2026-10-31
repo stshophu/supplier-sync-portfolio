@@ -131,9 +131,10 @@ def update_existing(ev, row, brand, rrp, qty):
     new_status = "draft" if status == "review-margin" else None
     if COMMIT:
         # price + compare-at
-        v_update = {"id": ev["variant_id"], "price": f"{price:.2f}"}
-        if compare_at:
-            v_update["compare_at_price"] = f"{compare_at:.2f}"
+        # compare_at_price is always cleared: the Loxuno "RRP" is the supplier's own
+        # shop price, which Google Merchant Center treats as a misleading discount.
+        v_update = {"id": ev["variant_id"], "price": f"{price:.2f}",
+                    "compare_at_price": None}
         req("PUT", f"{API}/variants/{ev['variant_id']}.json",
             json={"variant": v_update})
         time.sleep(0.4)
@@ -182,8 +183,7 @@ def create_placeholder(sku, row, brand, rrp, qty):
 
     variant = {"sku": sku, "price": f"{price:.2f}", "option1": size,
                "inventory_management": "shopify"}
-    if rrp and rrp > price:
-        variant["compare_at_price"] = f"{rrp:.2f}"
+    # No compare-at price (see note in update_existing).
     if valid_gtin(gtin):
         variant["barcode"] = gtin
 
