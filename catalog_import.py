@@ -98,6 +98,24 @@ _WEIGHT_RULES = [
     (("shirt", "polo", "t-shirt", "tee", "top", "blouse", "bodysuit"), 0.5),
 ]
 
+def valid_gtin(code):
+    """True only for a real, publicly usable GTIN (EAN-8, UPC-A, EAN-13/JAN, GTIN-14).
+    Rejects supplier-internal codes, wrong check digits and GS1 'restricted
+    circulation' ranges (in-store codes starting with 2, or UPC 2/4/02/04), which
+    Google Merchant Center treats as false identifiers."""
+    g = str(code or "").strip()
+    if not g.isdigit() or len(g) not in (8, 12, 13, 14) or len(set(g)) == 1:
+        return False
+    digits = [int(c) for c in g][::-1]
+    total = sum(d * (3 if i % 2 == 0 else 1) for i, d in enumerate(digits[1:]))
+    if (10 - total % 10) % 10 != digits[0]:
+        return False
+    g13 = g.zfill(13) if len(g) < 13 else g[-13:]
+    if g13[0] == "2" or g13[:2] in ("02", "04"):
+        return False
+    return True
+
+
 def default_weight_kg(product_type: str = "", title: str = "") -> float:
     """Return a category-default billable weight in kg (never 0)."""
     for haystack in ((product_type or "").lower(), (title or "").lower()):
@@ -386,7 +404,7 @@ def build_product_group_price_feed(group_df, parallel_fb, text_lookup):
              "weight": wkg, "weight_unit": "kg"}
         if compare_at:
             v["compare_at_price"] = f"{compare_at:.2f}"
-        if gtin:
+        if valid_gtin(gtin):
             v["barcode"] = gtin
         variants.append(v)
         metas.append({"sku": sku, "cost": cost, "qty": qty, "status": status})
