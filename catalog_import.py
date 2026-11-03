@@ -486,13 +486,18 @@ def upsert_group(item):
         # "graduates" a placeholder to a full record: detected via the tag
         # Tier 2 stamps on those placeholders, backfill images here (once),
         # then drop the tag so this doesn't re-trigger on every future run.
-        body = {"id": pid, "title": prod["title"], "body_html": prod["body_html"],
+        # Title is set once at creation and then left alone, so titles
+        # edited in Shopify (SEO work, Nov 2026) are not overwritten by the
+        # daily import. Exception: placeholder graduation below, where the
+        # bare/Italian Tier 2 title must be replaced once.
+        body = {"id": pid, "body_html": prod["body_html"],
                 "vendor": prod["vendor"], "product_type": prod["product_type"],
                 "status": prod["status"], "tags": prod["tags"]}
         if "pending-cost-verification" in (existing.get("product_tags") or []):
             tags = [t.strip() for t in prod["tags"].split(",") if t.strip()]
             tags = [t for t in tags if t != "pending-cost-verification"]
             body["tags"] = ", ".join(tags)
+            body["title"] = prod["title"]
             if prod.get("images"):
                 body["images"] = prod["images"]
             item["backfilled_placeholder"] = True
