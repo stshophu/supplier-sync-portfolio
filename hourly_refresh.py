@@ -131,10 +131,10 @@ def update_existing(ev, row, brand, rrp, qty):
     new_status = "draft" if status == "review-margin" else None
     if COMMIT:
         # price + compare-at
-        # compare_at_price is always cleared: the Loxuno "RRP" is the supplier's own
-        # shop price, which Google Merchant Center treats as a misleading discount.
+        # compare_at_price = full Italian retail price (UVP/RRP in the shop only;
+        # the Google feed never sends it).
         v_update = {"id": ev["variant_id"], "price": f"{price:.2f}",
-                    "compare_at_price": None}
+                    "compare_at_price": f"{compare_at:.2f}" if compare_at else None}
         req("PUT", f"{API}/variants/{ev['variant_id']}.json",
             json={"variant": v_update})
         time.sleep(0.4)
