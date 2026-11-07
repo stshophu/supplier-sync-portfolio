@@ -67,7 +67,7 @@ import pandas as pd
 
 from supplier_common import (log, load_feed, req, API, find_variant_by_sku,
                            get_location_id, set_inventory_cost,
-                           set_inventory_quantity, add_tag)
+                           set_inventory_quantity, add_tag, set_rrp_metafield)
 
 # ── Category-based weight defaults ────────────────────────────────────────────
 # Kept in sync with backfill_weights.py / channable_sync.py
@@ -407,7 +407,7 @@ def build_product_group_price_feed(group_df, parallel_fb, text_lookup):
         if valid_gtin(gtin):
             v["barcode"] = gtin
         variants.append(v)
-        metas.append({"sku": sku, "cost": cost, "qty": qty, "status": status})
+        metas.append({"sku": sku, "cost": cost, "qty": qty, "status": status, "rrp": rrp})
         statuses.append(status)
 
     return _finalize_group(variants, metas, statuses, title, body, brand,
@@ -441,7 +441,9 @@ def _finalize_group(variants, metas, statuses, title, body, brand,
         "tags": ", ".join(tags), "options": [{"name": "Size"}],
         "variants": variants, "images": images,
     }}
+    rrps = [float(m["rrp"]) for m in metas if m.get("rrp")]
     return {"payload": payload, "metas": metas, "title": title,
+            "rrp": max(rrps) if rrps else None,
             "status": product_status, "worst": worst,
             "n_variants": len(variants),
             "n_zeroed": sum(1 for m in metas
@@ -525,6 +527,7 @@ def upsert_group(item):
                         sku_to_inv[v["sku"]] = created["inventory_item_id"]
                     time.sleep(0.4)
             apply_variant_inventory(sku_to_inv, metas)
+            set_rrp_metafield(pid, item.get("rrp"), COMMIT)
         return "update"
     else:
         payload = item["payload"]
@@ -544,6 +547,7 @@ def upsert_group(item):
                           for v in created.get("variants", [])}
             time.sleep(0.5)
             apply_variant_inventory(sku_to_inv, metas)
+            set_rrp_metafield(created.get("id"), item.get("rrp"), COMMIT)
         return "create"
 
 

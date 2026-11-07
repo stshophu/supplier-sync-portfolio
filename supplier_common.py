@@ -248,6 +248,18 @@ def set_inventory_quantity(inventory_item_id, qty, commit):
     time.sleep(0.5)
 
 
+def set_rrp_metafield(product_id, rrp, commit):
+    """Italian retail price as product metafield custom.rrp. The shop shows it
+    as plain information ("UVP des Herstellers"), never as a crossed-out price,
+    and it is never sent to Google."""
+    if not commit or not product_id or not rrp or float(rrp) <= 0:
+        return
+    graphql("""mutation($m: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $m) { userErrors { field message } } }""", {"m": [{
+        "ownerId": f"gid://shopify/Product/{product_id}",
+        "namespace": "custom", "key": "rrp", "type": "number_decimal",
+        "value": f"{float(rrp):.2f}"}]})
+
+
 def add_tag(existing_tags, new_tag):
     """Merge a tag into a comma-joined or list tag set, de-duplicated."""
     if isinstance(existing_tags, str):
