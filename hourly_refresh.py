@@ -48,7 +48,8 @@ import sys
 import time
 import pandas as pd
 
-from supplier_common import (log, load_feed, req, API, find_variant_by_sku, get_location_id,
+from supplier_common import (set_rrp_metafield,
+                             log, load_feed, req, API, find_variant_by_sku, get_location_id,
                            set_inventory_cost, set_inventory_quantity, add_tag, remove_tag)
 from pricing import price_decision, _round5
 from translations import (translate_category, translate_gender, build_product_type,
@@ -116,6 +117,9 @@ def update_existing(ev, row, brand, rrp, qty):
         # Tier 1 hasn't set a cost yet -> leave price, just refresh stock,
         # and make sure it's flagged for Tier 1 to complete.
         set_inventory_quantity(ev["inventory_item_id"], qty, COMMIT)
+        # UVP (full retail price) does not depend on cost: set it now so
+        # placeholders show it before Tier 1 graduates them.
+        set_rrp_metafield(ev.get("product_id"), rrp, COMMIT)
         return "stock-only-no-cost"
 
     price, compare_at, status = price_decision(
@@ -198,6 +202,8 @@ def create_placeholder(sku, row, brand, rrp, qty):
         inv_id = r.json()["product"]["variants"][0]["inventory_item_id"]
         time.sleep(0.5)
         set_inventory_quantity(inv_id, qty, COMMIT)
+        # Full retail price (c:retail_price_EUR:integer) as UVP metafield.
+        set_rrp_metafield(r.json()["product"].get("id"), rrp, COMMIT)
     return "placeholder-created"
 
 
