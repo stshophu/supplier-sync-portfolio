@@ -122,6 +122,10 @@ def update_existing(ev, row, brand, rrp, qty):
         set_rrp_metafield(ev.get("product_id"), rrp, COMMIT)
         return "stock-only-no-cost"
 
+    # UVP for products that already have a cost: write only if missing/changed.
+    if rrp and (ev.get("rrp_current") is None or abs(ev["rrp_current"] - float(rrp)) > 0.005):
+        set_rrp_metafield(ev.get("product_id"), rrp, COMMIT)
+
     price, compare_at, status = price_decision(
         cost, rrp, brand, cents_to_eur(row.get("c:discount_retail_price_EUR:integer")))
     if price is None:
