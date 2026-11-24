@@ -198,7 +198,7 @@ def find_variant_by_sku(sku):
             price
             compareAtPrice
             inventoryItem { id legacyResourceId unitCost { amount } }
-            product { id legacyResourceId status tags }
+            product { id legacyResourceId status tags rrp: metafield(namespace: "custom", key: "rrp") { value } }
           }
         }
       }
@@ -222,6 +222,7 @@ def find_variant_by_sku(sku):
         "product_id": int(n["product"]["legacyResourceId"]),
         "product_status": n["product"]["status"],
         "product_tags": n["product"].get("tags") or [],
+        "rrp_current": float(n["product"]["rrp"]["value"]) if (n["product"].get("rrp") or {}).get("value") else None,
     }
 
 
