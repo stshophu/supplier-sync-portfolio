@@ -492,12 +492,20 @@ def upsert_group(item):
         # edited in Shopify (SEO work, Nov 2026) are not overwritten by the
         # daily import. Exception: placeholder graduation below, where the
         # bare/Italian Tier 2 title must be replaced once.
-        body = {"id": pid, "body_html": prod["body_html"],
-                "vendor": prod["vendor"], "product_type": prod["product_type"],
-                "status": prod["status"], "tags": prod["tags"]}
+        # Existing products: only price/stock side (status stays, it follows
+        # the margin check). Description, vendor, product type and tags are
+        # NOT overwritten -- they are edited in Shopify. The hold tag is the
+        # one exception (set above), and placeholder graduation below fills
+        # in the full record once.
+        body = {"id": pid, "status": prod["status"]}
+        if item.get("held_pending_tier2"):
+            body["tags"] = prod["tags"]
         if "pending-cost-verification" in (existing.get("product_tags") or []):
             tags = [t.strip() for t in prod["tags"].split(",") if t.strip()]
             tags = [t for t in tags if t != "pending-cost-verification"]
+            body["body_html"] = prod["body_html"]
+            body["vendor"] = prod["vendor"]
+            body["product_type"] = prod["product_type"]
             body["tags"] = ", ".join(tags)
             body["title"] = prod["title"]
             if prod.get("images"):
