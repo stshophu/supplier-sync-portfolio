@@ -62,6 +62,11 @@ def price_decision(cost, rrp, vendor="", supplier_suggested=None):
     if cost <= 0:
         return None, None, "review-margin"
 
+    if PRICE_RULE == "floor":
+        # No hold, no RRP cap: the min-profit floor always wins. UVP overshoot is
+        # only reported (info["above_rrp"]) by the dry-run CSV.
+        return float(floor_price_decision(cost, rrp, supplier_suggested)[0]), None, "ok"
+
     landed = cost + SHIPPING
     target_price = landed * (1 + VAT_RATE) / (1 - TARGET_MARGIN)
     floor_price = landed * (1 + VAT_RATE) / (1 - MIN_ACCEPTABLE_MARGIN)
@@ -83,6 +88,52 @@ def price_decision(cost, rrp, vendor="", supplier_suggested=None):
 
     compare_at = round(rrp, 2) if rrp > price else None
     return round(price, 2), compare_at, "ok"
+
+
+# ── Floor pricing rule (opt-in; default OFF so live prices are unchanged) ─────
+#   PRICE_RULE=floor -> price = max(supplier suggested price, min-profit price)
+# Every cost below is an ASSUMPTION until confirmed against real invoices.
+import os as _os
+def _envf(name, default):
+    v = _os.getenv(name, "").strip()
+    return float(v) if v else float(default)
+
+
+PRICE_RULE        = (_os.getenv("PRICE_RULE", "") or "legacy").strip().lower()
+MIN_PROFIT_EUR    = _envf("MIN_PROFIT_EUR", "40")
+PAY_FEE_PCT       = _envf("PAY_FEE_PCT", "0.025")  # of gross
+PAY_FEE_FIXED     = _envf("PAY_FEE_FIXED", "0.30")
+SHIP_COST_DE      = _envf("SHIP_COST_DE", "10")     # what DHL costs us
+SHIP_PAID_DE      = _envf("SHIP_PAID_DE", "6.95")   # what the customer pays
+FREE_SHIP_FROM    = _envf("FREE_SHIP_FROM", "150")
+EXTRA_COST_ORDER  = _envf("EXTRA_COST_ORDER", "0")      # packaging etc.
+BEYOND_COMMISSION = _envf("BEYOND_COMMISSION", "0.15")
+BEYOND_SHORTFALL  = _envf("BEYOND_SHORTFALL", "0")      # DHL cost to HK minus the 50 EUR paid
+BEYOND_ENABLED    = _os.getenv("BEYOND_ENABLED", "1").strip().lower() in ("1", "true", "yes")
+
+
+def min_profit_price(cost):
+    """Lowest shop price (gross, EUR) that still earns MIN_PROFIT_EUR on this
+    item in Germany and, if BEYOND_ENABLED, on Beyond (same price everywhere)."""
+    base = cost + MIN_PROFIT_EUR + PAY_FEE_FIXED + EXTRA_COST_ORDER
+    k = 1 / (1 + VAT_RATE) - PAY_FEE_PCT
+    p = (base + SHIP_COST_DE - SHIP_PAID_DE / (1 + VAT_RATE)) / k
+    if p >= FREE_SHIP_FROM:
+        p = (base + SHIP_COST_DE) / k
+    if BEYOND_ENABLED:
+        p = max(p, (cost + MIN_PROFIT_EUR + EXTRA_COST_ORDER + BEYOND_SHORTFALL) / (1 - BEYOND_COMMISSION))
+    return p
+
+
+def floor_price_decision(cost, rrp, supplier_suggested):
+    """Returns (price, info): max(supplier price, min-profit price), rounded UP to 5."""
+    floor = min_profit_price(cost)
+    base = supplier_suggested if supplier_suggested and supplier_suggested > 0 else None
+    price = int(-(-max(base or 0, floor) // 5) * 5)
+    return price, {"supplier_price": base, "floor_price": round(floor, 2), "new_price": price,
+                   "decision": "no-supplier-price" if base is None else ("raised" if price > base else "keep"),
+                   "raise_pct": round((price / base - 1) * 100, 1) if base else None,
+                   "above_rrp": bool(rrp and price > rrp)}
 
 
 if __name__ == "__main__":
