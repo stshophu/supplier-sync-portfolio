@@ -44,7 +44,13 @@ def load_taxonomy():
     def get(table, params):
         r = requests.get(f"{url}/rest/v1/{table}", params=params, headers=h, timeout=60)
         if r.status_code != 200:
-            sys.exit(f"Taxonomy read failed ({table}): HTTP {r.status_code} {r.text[:300]}")
+            host = url.split("//")[-1].split(".")[0][:6] + "..."
+            try:
+                paths = requests.get(f"{url}/rest/v1/", headers=h, timeout=60).json().get("paths", {})
+                hint = f"exposed tables: {len(paths)}, taxonomy-like: {[p for p in paths if 'taxonomy' in p]}, has products: {'/products' in paths}"
+            except Exception as e:
+                hint = f"(could not list tables: {e})"
+            sys.exit(f"Taxonomy read failed ({table}) host={host}: HTTP {r.status_code} {r.text[:200]} | {hint}")
         return r.json()
     rows = get("taxonomy_map", {"select": "kind,term,canonical,parent,scope,priority",
                                 "approved": "eq.true", "limit": "5000"})
