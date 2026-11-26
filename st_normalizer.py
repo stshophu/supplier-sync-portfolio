@@ -270,7 +270,8 @@ def process(p, mt):
     cur_cat = (p.get("fcat") or {}).get("value") if p.get("fcat") else None
     cur_sub = (p.get("fsub") or {}).get("value") if p.get("fsub") else None
     return {
-        "id": p["id"].split("/")[-1], "title": title,
+        "id": p["id"].split("/")[-1], "title": title, "tags": "|".join(p.get("tags") or []),
+        "options": "|".join((o["name"] or "") for o in p.get("options") or []),
         "type_before": p.get("productType"), "type_after": new_type,
         "category_before": cur_cat, "category_after": cat,
         "subcategory_before": cur_sub, "subcategory_after": sub,
@@ -306,6 +307,19 @@ def main():
     print(f"Would change: type={chg['type']} category={chg['category']} subcategory={chg['subcategory']}")
     print("Flags:", dict(flagc.most_common()))
     print(f"Report: {a.out}")
+    # diagnostics: which products carry which flag, by source tag and option names
+    SRC = {"ViterboSync", "VaittoFeed", "SupplierSync", "poizon", "stork", "buyma", "vaitto-test"}
+    for flag in ("no_colour", "no_subcategory", "unmapped_colour", "size_unknown"):
+        sel = [r for r in rows if flag in r["flags"]]
+        if not sel:
+            continue
+        src = Counter(next((t for t in r["tags"].split("|") if t in SRC), "other") for r in sel)
+        opt = Counter(r["options"] or "(none)" for r in sel)
+        print(f"\n== {flag}: {len(sel)} ==")
+        print("by source tag:", dict(src.most_common()))
+        print("by option names:", dict(opt.most_common(5)))
+        for r in sel[:6]:
+            print("  e.g.", r["id"], "|", r["title"][:70], "|", r["flags"][:80])
 
 
 if __name__ == "__main__":
