@@ -9,6 +9,20 @@ on:
         description: "Apply to Shopify (otherwise dry run)"
         type: boolean
         default: false
+      price_rule:
+        description: "Price rule for this manual run: legacy (today) or floor (min-profit)"
+        type: choice
+        options: [floor, legacy]
+        default: floor
+      min_profit:
+        description: "Minimum profit per item (EUR)"
+        default: "40"
+      ship_cost_de:
+        description: "DHL cost per parcel to Germany (EUR)"
+        default: "10"
+      beyond_shortfall:
+        description: "Beyond: DHL cost to Hong Kong minus the 50 EUR the buyer pays (EUR)"
+        default: "0"
 
 jobs:
   refresh:
@@ -22,6 +36,11 @@ jobs:
       - name: Run Tier 2 refresh
         env:
           SHOPIFY_DOMAIN: ${{ secrets.SHOPIFY_DOMAIN }}
+          PRICE_RULE: ${{ github.event_name == 'workflow_dispatch' && inputs.price_rule || vars.PRICE_RULE || 'legacy' }}
+          MIN_PROFIT_EUR: ${{ github.event_name == 'workflow_dispatch' && inputs.min_profit || vars.MIN_PROFIT_EUR }}
+          SHIP_COST_DE: ${{ github.event_name == 'workflow_dispatch' && inputs.ship_cost_de || vars.SHIP_COST_DE }}
+          BEYOND_SHORTFALL: ${{ github.event_name == 'workflow_dispatch' && inputs.beyond_shortfall || vars.BEYOND_SHORTFALL }}
+          EXTRA_COST_ORDER: ${{ vars.EXTRA_COST_ORDER }}
           SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
           SUPPLIER_LOCATION_ID: ${{ secrets.SUPPLIER_LOCATION_ID }}
           SUPPLIER_PRICE_FEED: ${{ secrets.SUPPLIER_PRICE_FEED }}
@@ -31,3 +50,10 @@ jobs:
           else
             python3 hourly_refresh.py
           fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: loxuno-dry-run-prices
+          path: dry_run_prices.csv
+          if-no-files-found: ignore
+          retention-days: 7

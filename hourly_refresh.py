@@ -136,6 +136,9 @@ def update_existing(ev, row, brand, rrp, qty):
     if activate and status == "review-margin":
         activate = False
 
+    if not COMMIT:
+        _dry_row(ev, row, brand, cost, rrp, price)
+
     new_status = "draft" if status == "review-margin" else None
     if COMMIT:
         # price + compare-at
@@ -211,6 +214,36 @@ def create_placeholder(sku, row, brand, rrp, qty):
     return "placeholder-created"
 
 
+_DRY_ROWS = []
+
+def _dry_row(ev, row, brand, cost, rrp, new_price):
+    """Dry-run only: collect old vs new price per variant for dry_run_prices.csv."""
+    from pricing import floor_price_decision, SHIPPING, TARGET_MARGIN, VAT_RATE
+    sug = cents_to_eur(row.get("c:discount_retail_price_EUR:integer"))
+    _, info = floor_price_decision(float(cost), rrp or 0, sug)
+    legacy = max(_round5((float(cost) + SHIPPING) * (1 + VAT_RATE) / (1 - TARGET_MARGIN)), sug or 0)
+    _DRY_ROWS.append({"sku": clean(row.get("Id")), "brand": brand, "cost": round(float(cost), 2),
+                      "uvp": rrp or "", "current_shopify": ev.get("price") or "",
+                      "legacy_formula": legacy, **info,
+                      "rule_price_now": new_price,
+                      "over_10pct": (info["raise_pct"] or 0) > 10,
+                      "over_30pct": (info["raise_pct"] or 0) > 30})
+
+
+def _write_dry_csv(path="dry_run_prices.csv"):
+    import csv
+    if not _DRY_ROWS:
+        return
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=list(_DRY_ROWS[0].keys()))
+        w.writeheader(); w.writerows(_DRY_ROWS)
+    c = lambda k: sum(1 for x in _DRY_ROWS if x["decision"] == k)
+    log(f"\n  DRY RUN prices: {len(_DRY_ROWS)} variants -> {path}")
+    log(f"    keep={c('keep')} raised={c('raised')} no-supplier-price={c('no-supplier-price')}"
+        f" | >10%={sum(x['over_10pct'] for x in _DRY_ROWS)} >30%={sum(x['over_30pct'] for x in _DRY_ROWS)}"
+        f" above UVP={sum(x['above_rrp'] for x in _DRY_ROWS)}")
+
+
 def main():
     log(f"Mode: {'COMMIT' if COMMIT else 'DRY RUN'}" + (f"  (limit {LIMIT})" if LIMIT else ""))
     k = load_feed(PRICE_FEED, sep=";", dtype=str)
@@ -263,6 +296,7 @@ def main():
     for kx, vx in sorted(counts.items()):
         log(f"  {kx:26} {vx}")
     if not COMMIT:
+        _write_dry_csv()
         log("\nDry run only. Re-run with --commit to apply.")
 
 
