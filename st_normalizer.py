@@ -47,7 +47,7 @@ def load_taxonomy():
             host = url.split("//")[-1].split(".")[0][:6] + "..."
             try:
                 paths = requests.get(f"{url}/rest/v1/", headers=h, timeout=60).json().get("paths", {})
-                hint = f"exposed tables: {len(paths)}, taxonomy-like: {[p for p in paths if 'taxonomy' in p]}, has products: {'/products' in paths}"
+                hint = f"exposed tables: {len(paths)}: {','.join(sorted(p.strip('/') for p in paths))}"
             except Exception as e:
                 hint = f"(could not list tables: {e})"
             sys.exit(f"Taxonomy read failed ({table}) host={host}: HTTP {r.status_code} {r.text[:200]} | {hint}")
