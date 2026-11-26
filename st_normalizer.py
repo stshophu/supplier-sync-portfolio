@@ -32,34 +32,7 @@ GENDER_WORDS = {
 
 
 # ---------------------------------------------------------------- taxonomy
-def load_taxonomy():
-    path = os.environ.get("ST_TAXONOMY_JSON")
-    if path:
-        return json.load(open(path, encoding="utf-8"))
-    url = (os.environ.get("VAITTO_SUPABASE_URL") or "").strip().rstrip("/")
-    key = "".join((os.environ.get("VAITTO_SUPABASE_SERVICE_KEY") or "").split())
-    if not url or not key:
-        sys.exit("Missing VAITTO_SUPABASE_URL / VAITTO_SUPABASE_SERVICE_KEY (or ST_TAXONOMY_JSON).")
-    h = {"apikey": key, "Authorization": f"Bearer {key}"}
-    def get(table, params):
-        r = requests.get(f"{url}/rest/v1/{table}", params=params, headers=h, timeout=60)
-        if r.status_code != 200:
-            host = url.split("//")[-1].split(".")[0][:6] + "..."
-            try:
-                paths = requests.get(f"{url}/rest/v1/", headers=h, timeout=60).json().get("paths", {})
-                hint = f"exposed tables: {len(paths)}: {','.join(sorted(p.strip('/') for p in paths))}"
-            except Exception as e:
-                hint = f"(could not list tables: {e})"
-            raise RuntimeError(f"Taxonomy read failed ({table}) host={host}: HTTP {r.status_code} {r.text[:200]} | {hint}")
-        return r.json()
-    try:
-        rows = get("taxonomy_map", {"select": "kind,term,canonical,parent,scope,priority",
-                                    "approved": "eq.true", "limit": "5000"})
-        canon = get("taxonomy_canon", {"select": "kind,value,sort", "order": "sort"})
-    except RuntimeError as e:
-        snap = os.path.join(os.path.dirname(os.path.abspath(__file__)), "st_taxonomy_snapshot.json")
-        print(f"WARNING: {e}\nWARNING: using snapshot file {snap} instead.", flush=True)
-        return json.load(open(snap, encoding="utf-8"))
+def _build(rows, canon):
     colour = {}
     for r in rows:
         if r["kind"] == "colour":
@@ -67,7 +40,47 @@ def load_taxonomy():
     sub = [[r["term"], r["canonical"], r["parent"], r["scope"], r["priority"] or 0]
            for r in rows if r["kind"] == "subcategory"]
     return {"colour": colour, "subcategory": sub,
-            "canon_colour": [c["value"] for c in canon if c["kind"] == "colour"]}
+            "canon_colour": [c["value"] for c in sorted(canon, key=lambda c: c.get("sort") or 0) if c["kind"] == "colour"]}
+
+
+def load_taxonomy():
+    """Order: local test file -> VAITTO export hook (live) -> Supabase REST -> committed snapshot."""
+    path = os.environ.get("ST_TAXONOMY_JSON")
+    if path:
+        return json.load(open(path, encoding="utf-8"))
+    snap = os.path.join(os.path.dirname(os.path.abspath(__file__)), "st_taxonomy_snapshot.json")
+    secret = "".join((os.environ.get("IMPORT_HOOK_SECRET") or "").split())
+    if secret:
+        hook = os.environ.get("VAITTO_TAXONOMY_URL", "https://vaitto.com/api/public/hooks/taxonomy-export")
+        try:
+            r = requests.get(hook, headers={"x-hook-secret": secret}, timeout=60)
+            if r.status_code != 200:
+                raise RuntimeError(f"HTTP {r.status_code} {r.text[:200]}")
+            d = r.json()
+            tax = _build(d["taxonomy_map"], d["taxonomy_canon"])
+            print(f"Taxonomy: LIVE from VAITTO ({len(d['taxonomy_map'])} mapping rows)", flush=True)
+            return tax
+        except Exception as e:
+            print(f"WARNING: taxonomy hook failed: {e}", flush=True)
+    url = (os.environ.get("VAITTO_SUPABASE_URL") or "").strip().rstrip("/")
+    key = "".join((os.environ.get("VAITTO_SUPABASE_SERVICE_KEY") or "").split())
+    if url and key:
+        h = {"apikey": key, "Authorization": f"Bearer {key}"}
+        try:
+            def get(table, params):
+                r = requests.get(f"{url}/rest/v1/{table}", params=params, headers=h, timeout=60)
+                if r.status_code != 200:
+                    raise RuntimeError(f"{table}: HTTP {r.status_code} {r.text[:150]}")
+                return r.json()
+            rows = get("taxonomy_map", {"select": "kind,term,canonical,parent,scope,priority",
+                                        "approved": "eq.true", "limit": "5000"})
+            canon = get("taxonomy_canon", {"select": "kind,value,sort", "order": "sort"})
+            print("Taxonomy: LIVE from Supabase REST", flush=True)
+            return _build(rows, canon)
+        except Exception as e:
+            print(f"WARNING: supabase taxonomy read failed: {e}", flush=True)
+    print(f"WARNING: using committed SNAPSHOT {snap} (may be outdated)", flush=True)
+    return json.load(open(snap, encoding="utf-8"))
 
 
 class Matcher:
