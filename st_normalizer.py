@@ -324,6 +324,8 @@ def main():
         print(f"\n== {flag}: {len(sel)} ==")
         print("by source tag:", dict(src.most_common()))
         print("by option names:", dict(opt.most_common(5)))
+        tg = Counter(t for r in sel for t in r["tags"].split("|") if t)
+        print("top tags:", dict(tg.most_common(25)))
         for r in sel[:6]:
             print("  e.g.", r["id"], "|", r["title"][:70], "|", r["flags"][:80])
 
