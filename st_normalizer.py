@@ -36,8 +36,8 @@ def load_taxonomy():
     path = os.environ.get("ST_TAXONOMY_JSON")
     if path:
         return json.load(open(path, encoding="utf-8"))
-    url = os.environ.get("VAITTO_SUPABASE_URL")
-    key = os.environ.get("VAITTO_SUPABASE_SERVICE_KEY")
+    url = (os.environ.get("VAITTO_SUPABASE_URL") or "").strip().rstrip("/")
+    key = "".join((os.environ.get("VAITTO_SUPABASE_SERVICE_KEY") or "").split())
     if not url or not key:
         sys.exit("Missing VAITTO_SUPABASE_URL / VAITTO_SUPABASE_SERVICE_KEY (or ST_TAXONOMY_JSON).")
     h = {"apikey": key, "Authorization": f"Bearer {key}"}
@@ -163,7 +163,7 @@ def shopify_products(status="active", limit=None):
         data = json.load(open(path, encoding="utf-8"))
         yield from (data[:limit] if limit else data)
         return
-    dom, tok = os.environ.get("SHOPIFY_DOMAIN"), os.environ.get("SHOPIFY_TOKEN")
+    dom, tok = (os.environ.get("SHOPIFY_DOMAIN") or "").strip(), (os.environ.get("SHOPIFY_TOKEN") or "").strip()
     if not dom or not tok:
         sys.exit("Missing SHOPIFY_DOMAIN / SHOPIFY_TOKEN (or ST_PRODUCTS_JSON).")
     url = f"https://{dom}/admin/api/{API_VERSION}/graphql.json"
