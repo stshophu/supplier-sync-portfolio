@@ -1,0 +1,35 @@
+name: ST normalizer — dry run report
+
+# DRY RUN ONLY: reads Shopify + the VAITTO mapping table, writes a CSV report.
+# It never writes to Shopify.
+on:
+  workflow_dispatch:
+    inputs:
+      status:
+        description: "Which products (active or any)"
+        type: choice
+        options: [active, any]
+        default: active
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: Run normalizer (dry run)
+        env:
+          SHOPIFY_DOMAIN: ${{ secrets.SHOPIFY_DOMAIN }}
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          VAITTO_SUPABASE_URL: ${{ secrets.VAITTO_SUPABASE_URL }}
+          VAITTO_SUPABASE_SERVICE_KEY: ${{ secrets.VAITTO_SUPABASE_SERVICE_KEY }}
+        run: python3 st_normalizer.py --status "${{ github.event.inputs.status }}" --out st_normalizer_report.csv | tee summary.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: st-normalizer-report
+          path: |
+            st_normalizer_report.csv
+            summary.txt
