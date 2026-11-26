@@ -109,6 +109,7 @@ FREE_SHIP_FROM    = _envf("FREE_SHIP_FROM", "150")
 EXTRA_COST_ORDER  = _envf("EXTRA_COST_ORDER", "0")      # packaging etc.
 BEYOND_COMMISSION = _envf("BEYOND_COMMISSION", "0.15")
 BEYOND_SHORTFALL  = _envf("BEYOND_SHORTFALL", "0")      # DHL cost to HK minus the 50 EUR paid
+MAX_OVER_UVP      = _envf("MAX_OVER_UVP", "0.30")   # report only: flag items whose floor price is > UVP x (1+this)
 BEYOND_ENABLED    = _os.getenv("BEYOND_ENABLED", "1").strip().lower() in ("1", "true", "yes")
 
 
@@ -135,7 +136,8 @@ def floor_price_decision(cost, rrp, supplier_suggested):
     return price, {"supplier_price": base, "floor_price": round(floor, 2), "new_price": round(price, 2),
                    "decision": "no-supplier-price" if base is None else ("raised" if price > base + 0.005 else "keep"),
                    "raise_pct": round((price / base - 1) * 100, 1) if base else None,
-                   "above_rrp": bool(rrp and price > rrp)}
+                   "above_rrp": bool(rrp and price > rrp),
+                   "over_uvp_ceiling": bool(rrp and MAX_OVER_UVP > 0 and price > rrp * (1 + MAX_OVER_UVP))}
 
 
 if __name__ == "__main__":
