@@ -130,6 +130,10 @@ def normalize_size(raw, category=None):
         return u, "waist"
     u = {"XXXL": "3XL", "XXXXL": "4XL", "2XL": "XXL", "SM": "S-M", "ML": "M-L"}.get(u, u)
     u = re.sub(r"\s*[/]\s*", "-", u)
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(IT|EU|US|UK|FR|DE)", u)
+    if m:
+        return f"{m.group(2)} {m.group(1)}", "prefixed"
+    u = {"LXL": "L-XL", "XSS": "XS-S", "SM": "S-M"}.get(u, u)
     m = re.fullmatch(r"(IT|EU|US|UK|FR|DE)\s*(\d+(\.\d+)?)", u)
     if m:
         return f"{m.group(1)} {m.group(2)}", "prefixed"
@@ -244,8 +248,10 @@ def process(p, mt):
             flags.append("multi_colour_value")
     if not colour_vals:
         c, term = mt.colour(" ".join(title.split()[-2:]))
+        if not c:
+            c, term = mt.colour(title)          # whole title, leftmost colour word
         if c:
-            colours.append(c); how = "from_title"
+            colours.append(c); flags.append("colour_from_title")
         else:
             flags.append("no_colour")
     colours = list(dict.fromkeys(colours))
