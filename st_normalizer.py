@@ -72,6 +72,7 @@ def load_taxonomy():
 
 class Matcher:
     def __init__(self, tax):
+        self.canon_colours = list(tax["colour"].keys())
         self.colour_terms = []  # (term_lower, canonical)
         for canon, terms in tax["colour"].items():
             for t in terms:
@@ -215,6 +216,23 @@ def gender_of(p):
     return GENDER_WORDS.get(first)
 
 
+SAFE_TAG_COLOURS = {"gray": "Grey", "bianco": "White", "nero": "Black", "rosso": "Red", "verde": "Green",
+                    "blu": "Blue", "giallo": "Yellow", "marrone": "Brown", "rosa": "Pink", "grigio": "Grey",
+                    "azzurro": "Light Blue", "viola": "Purple", "arancione": "Orange", "argento": "Silver",
+                    "oro": "Gold", "cammello": "Camel", "multicolor": "Multicolor", "multicolour": "Multicolor"}
+
+
+def colours_from_tags(tags, canon_names):
+    """Only exact colour tags (Black, blue, Light Blue ...). Fabric/pattern words like denim or check are ignored."""
+    out = []
+    for t in tags or []:
+        k = t.strip().lower()
+        c = canon_names.get(k) or SAFE_TAG_COLOURS.get(k)
+        if c and c not in out:
+            out.append(c)
+    return out
+
+
 def process(p, mt):
     title = p.get("title") or ""
     opts = {(o["name"] or "").lower(): o["values"] for o in p.get("options") or []}
@@ -247,6 +265,12 @@ def process(p, mt):
         if len(parts) > 1:
             flags.append("multi_colour_value")
     if not colour_vals:
+        tagc = colours_from_tags(p.get("tags"), {c.lower(): c for c in mt.canon_colours})
+        if len(tagc) >= 3:
+            tagc = ["Multicolor"]
+        if tagc:
+            colours.extend(tagc); flags.append("colour_from_tags")
+    if not colour_vals and not colours:
         c, term = mt.colour(" ".join(title.split()[-2:]))
         if not c:
             c, term = mt.colour(title)          # whole title, leftmost colour word
