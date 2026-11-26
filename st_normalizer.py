@@ -328,11 +328,65 @@ def process(p, mt):
     }
 
 
+def apply_filter_metafields(rows, a):
+    """Step 1: only metafields filter.category / filter.subcategory. Backup first; --write needs --confirm WRITE."""
+    todo = [r for r in rows if r["category_after"] and r["subcategory_after"]
+            and (r["category_before"] != r["category_after"] or r["subcategory_before"] != r["subcategory_after"])]
+    if a.sample and len(todo) > a.sample:
+        step = len(todo) / a.sample
+        todo = [todo[int(i * step)] for i in range(a.sample)]
+    with open(a.backup, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["id", "title", "category_before", "subcategory_before", "category_after", "subcategory_after"])
+        for r in todo:
+            w.writerow([r["id"], r["title"], r["category_before"] or "", r["subcategory_before"] or "",
+                        r["category_after"], r["subcategory_after"]])
+    print(f"\n== {'WRITE' if a.write else 'PREVIEW'}: {len(todo)} products; backup file: {a.backup} ==")
+    if not a.write:
+        for r in todo[:25]:
+            print(f"  {r['id']} | {r['title'][:55]} | {r['category_before'] or '-'}/{r['subcategory_before'] or '-'}"
+                  f" -> {r['category_after']}/{r['subcategory_after']}")
+        return
+    if a.confirm != "WRITE":
+        sys.exit('Refusing to write: pass --confirm WRITE')
+    dom, tok = (os.environ.get("SHOPIFY_DOMAIN") or "").strip(), (os.environ.get("SHOPIFY_TOKEN") or "").strip()
+    url = f"https://{dom}/admin/api/{API_VERSION}/graphql.json"
+    hdr = {"X-Shopify-Access-Token": tok, "Content-Type": "application/json"}
+    m = """mutation($mf:[MetafieldsSetInput!]!){ metafieldsSet(metafields:$mf){ userErrors{ field message code } } }"""
+    ok = err = 0
+    for i in range(0, len(todo), 12):
+        batch = todo[i:i + 12]
+        mf = []
+        for r in batch:
+            gid = f"gid://shopify/Product/{r['id']}"
+            mf.append({"ownerId": gid, "namespace": "filter", "key": "category",
+                       "type": "single_line_text_field", "value": r["category_after"]})
+            mf.append({"ownerId": gid, "namespace": "filter", "key": "subcategory",
+                       "type": "single_line_text_field", "value": r["subcategory_after"]})
+        for attempt in range(6):
+            resp = requests.post(url, headers=hdr, json={"query": m, "variables": {"mf": mf}}, timeout=90)
+            if resp.status_code in (429, 500, 502, 503, 504):
+                time.sleep(2 * (attempt + 1)); continue
+            break
+        d = resp.json()
+        ue = ((d.get("data") or {}).get("metafieldsSet") or {}).get("userErrors") or d.get("errors")
+        if ue:
+            err += len(batch); print("  ERROR batch", i, str(ue)[:300], flush=True)
+        else:
+            ok += len(batch)
+        time.sleep(0.4)
+    print(f"Written: {ok} products OK, {err} in failed batches")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="st_normalizer_report.csv")
     ap.add_argument("--status", default="active", choices=["active", "any"])
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--sample", type=int, help="only the first N (evenly spread) products that would change")
+    ap.add_argument("--write", action="store_true", help="WRITE filter.category/filter.subcategory to Shopify")
+    ap.add_argument("--confirm", default="", help='must be exactly "WRITE" together with --write')
+    ap.add_argument("--backup", default="st_backup_before_write.csv")
     a = ap.parse_args()
 
     mt = Matcher(load_taxonomy())
@@ -342,6 +396,9 @@ def main():
     with open(a.out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader(); w.writerows(rows)
+
+    if a.sample or a.write:
+        apply_filter_metafields(rows, a)
 
     n = len(rows)
     flagc = Counter(fl.split(":")[0] for r in rows for fl in r["flags"].split(";") if fl)

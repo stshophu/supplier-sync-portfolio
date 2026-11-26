@@ -1,7 +1,6 @@
 name: ST normalizer — dry run report
 
-# DRY RUN ONLY: reads Shopify + the VAITTO mapping table, writes a CSV report.
-# It never writes to Shopify.
+# Default (report-only / preview-20) NEVER writes. Writing needs mode write-20/write-all AND confirm=WRITE.
 on:
   workflow_dispatch:
     inputs:
@@ -10,6 +9,15 @@ on:
         type: choice
         options: [active, any]
         default: active
+      mode:
+        description: "preview-20 = show 20 sample changes (no write); write-20 / write-all = WRITE to Shopify"
+        type: choice
+        options: [report-only, preview-20, write-20, write-all]
+        default: report-only
+      confirm:
+        description: 'Type WRITE to allow write-20 / write-all'
+        type: string
+        default: ""
 
 jobs:
   report:
@@ -29,10 +37,17 @@ jobs:
           VAITTO_SUPABASE_SERVICE_KEY: ${{ secrets.VAITTO_SUPABASE_SERVICE_KEY }}
         run: |
           set -o pipefail
-          python3 st_normalizer.py --status "${{ github.event.inputs.status }}" --out st_normalizer_report.csv | tee summary.txt
+          EXTRA=""
+          case "${{ github.event.inputs.mode }}" in
+            preview-20) EXTRA="--sample 20" ;;
+            write-20)   EXTRA="--sample 20 --write --confirm ${{ github.event.inputs.confirm }}" ;;
+            write-all)  EXTRA="--write --confirm ${{ github.event.inputs.confirm }}" ;;
+          esac
+          python3 st_normalizer.py --status "${{ github.event.inputs.status }}" --out st_normalizer_report.csv $EXTRA | tee summary.txt
       - uses: actions/upload-artifact@v4
         with:
           name: st-normalizer-report
           path: |
             st_normalizer_report.csv
             summary.txt
+            st_backup_before_write.csv
