@@ -26,7 +26,9 @@ jobs:
           SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
           VAITTO_SUPABASE_URL: ${{ secrets.VAITTO_SUPABASE_URL }}
           VAITTO_SUPABASE_SERVICE_KEY: ${{ secrets.VAITTO_SUPABASE_SERVICE_KEY }}
-        run: python3 st_normalizer.py --status "${{ github.event.inputs.status }}" --out st_normalizer_report.csv | tee summary.txt
+        run: |
+          set -o pipefail
+          python3 st_normalizer.py --status "${{ github.event.inputs.status }}" --out st_normalizer_report.csv | tee summary.txt
       - uses: actions/upload-artifact@v4
         with:
           name: st-normalizer-report

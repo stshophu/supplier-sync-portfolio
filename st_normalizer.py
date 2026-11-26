@@ -41,12 +41,14 @@ def load_taxonomy():
     if not url or not key:
         sys.exit("Missing VAITTO_SUPABASE_URL / VAITTO_SUPABASE_SERVICE_KEY (or ST_TAXONOMY_JSON).")
     h = {"apikey": key, "Authorization": f"Bearer {key}"}
-    rows = requests.get(
-        f"{url}/rest/v1/taxonomy_map",
-        params={"select": "kind,term,canonical,parent,scope,priority", "approved": "eq.true", "limit": "5000"},
-        headers=h, timeout=60).json()
-    canon = requests.get(f"{url}/rest/v1/taxonomy_canon",
-                         params={"select": "kind,value,sort", "order": "sort"}, headers=h, timeout=60).json()
+    def get(table, params):
+        r = requests.get(f"{url}/rest/v1/{table}", params=params, headers=h, timeout=60)
+        if r.status_code != 200:
+            sys.exit(f"Taxonomy read failed ({table}): HTTP {r.status_code} {r.text[:300]}")
+        return r.json()
+    rows = get("taxonomy_map", {"select": "kind,term,canonical,parent,scope,priority",
+                                "approved": "eq.true", "limit": "5000"})
+    canon = get("taxonomy_canon", {"select": "kind,value,sort", "order": "sort"})
     colour = {}
     for r in rows:
         if r["kind"] == "colour":
