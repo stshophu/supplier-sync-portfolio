@@ -50,11 +50,16 @@ def load_taxonomy():
                 hint = f"exposed tables: {len(paths)}: {','.join(sorted(p.strip('/') for p in paths))}"
             except Exception as e:
                 hint = f"(could not list tables: {e})"
-            sys.exit(f"Taxonomy read failed ({table}) host={host}: HTTP {r.status_code} {r.text[:200]} | {hint}")
+            raise RuntimeError(f"Taxonomy read failed ({table}) host={host}: HTTP {r.status_code} {r.text[:200]} | {hint}")
         return r.json()
-    rows = get("taxonomy_map", {"select": "kind,term,canonical,parent,scope,priority",
-                                "approved": "eq.true", "limit": "5000"})
-    canon = get("taxonomy_canon", {"select": "kind,value,sort", "order": "sort"})
+    try:
+        rows = get("taxonomy_map", {"select": "kind,term,canonical,parent,scope,priority",
+                                    "approved": "eq.true", "limit": "5000"})
+        canon = get("taxonomy_canon", {"select": "kind,value,sort", "order": "sort"})
+    except RuntimeError as e:
+        snap = os.path.join(os.path.dirname(os.path.abspath(__file__)), "st_taxonomy_snapshot.json")
+        print(f"WARNING: {e}\nWARNING: using snapshot file {snap} instead.", flush=True)
+        return json.load(open(snap, encoding="utf-8"))
     colour = {}
     for r in rows:
         if r["kind"] == "colour":
