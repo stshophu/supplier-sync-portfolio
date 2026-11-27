@@ -361,6 +361,8 @@ def apply_filter_metafields(rows, a):
             print(f"  {r['id']} | {r['title'][:55]} | {r['category_before'] or '-'}/{r['subcategory_before'] or '-'}"
                   f" -> {r['category_after']}/{r['subcategory_after']}")
         return
+    if a.max and len(todo) > a.max:
+        sys.exit(f"SAFETY STOP: {len(todo)} products would change (cap {a.max}). Nothing written. Check the report.")
     if a.confirm != "WRITE":
         sys.exit('Refusing to write: pass --confirm WRITE')
     dom, tok = (os.environ.get("SHOPIFY_DOMAIN") or "").strip(), (os.environ.get("SHOPIFY_TOKEN") or "").strip()
@@ -401,6 +403,7 @@ def main():
     ap.add_argument("--write", action="store_true", help="WRITE filter.category/filter.subcategory to Shopify")
     ap.add_argument("--confirm", default="", help='must be exactly "WRITE" together with --write')
     ap.add_argument("--backup", default="st_backup_before_write.csv")
+    ap.add_argument("--max", type=int, default=0, help="safety cap: refuse to write if more products would change")
     ap.add_argument("--ids", default="", help="comma-separated product ids: restrict write/preview to these")
     a = ap.parse_args()
 

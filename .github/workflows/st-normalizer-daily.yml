@@ -1,0 +1,36 @@
+name: ST normalizer — daily (new/changed products)
+
+# Daily after the supplier imports: writes filter.category / filter.subcategory
+# only for products whose values differ from the central VAITTO mapping.
+# Safety cap: if more than 300 products would change, it writes nothing and fails.
+on:
+  schedule:
+    - cron: "17 5 * * *"     # 05:17 UTC daily, after the 03:00 catalog import
+  workflow_dispatch: {}
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests
+      - name: Normalize new/changed products
+        env:
+          SHOPIFY_DOMAIN: ${{ secrets.SHOPIFY_DOMAIN }}
+          SHOPIFY_TOKEN: ${{ secrets.SHOPIFY_TOKEN }}
+          IMPORT_HOOK_SECRET: ${{ secrets.IMPORT_HOOK_SECRET }}
+        run: |
+          set -o pipefail
+          python3 st_normalizer.py --status active --out st_normalizer_report.csv --write --confirm WRITE --max 300 | tee summary.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: st-normalizer-daily
+          path: |
+            st_normalizer_report.csv
+            summary.txt
+            st_backup_before_write.csv
+          retention-days: 30
