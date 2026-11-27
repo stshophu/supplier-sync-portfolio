@@ -246,6 +246,15 @@ def colours_from_tags(tags, canon_names):
     return out
 
 
+# Shopify display names (Siebentaschen style). VAITTO keeps its own short names internally.
+SHOP_NAMES = {
+    "Backpack": "Backpacks", "Clutch": "Clutches", "Crossbody": "Crossbody Bags",
+    "Shoulder": "Shoulder Bags", "Tote": "Tote Bags", "Luggage": "Travel Bags",
+    "Pants": "Trousers", "T-shirts & Tops": "T-Shirts & Tops", "Parka": "Parkas",
+    "Trench": "Trench Coats", "Slides": "Slides & Mules", "Hosiery": "Socks & Tights",
+}
+
+
 def process(p, mt):
     title = p.get("title") or ""
     opts = {(o["name"] or "").lower(): o["values"] for o in p.get("options") or []}
@@ -306,6 +315,8 @@ def process(p, mt):
     if cat == "Clothing" and "shoe" in types:
         flags.append("clothing_with_shoe_sizes")
 
+    if sub:
+        sub = SHOP_NAMES.get(sub, sub)
     g = gender_of(p)
     if not g:
         flags.append("no_gender")
@@ -332,7 +343,10 @@ def apply_filter_metafields(rows, a):
     """Step 1: only metafields filter.category / filter.subcategory. Backup first; --write needs --confirm WRITE."""
     todo = [r for r in rows if r["category_after"] and r["subcategory_after"]
             and (r["category_before"] != r["category_after"] or r["subcategory_before"] != r["subcategory_after"])]
-    if a.sample and len(todo) > a.sample:
+    if a.ids:
+        want = {x.strip() for x in a.ids.split(",") if x.strip()}
+        todo = [r for r in todo if r["id"] in want]
+    elif a.sample and len(todo) > a.sample:
         step = len(todo) / a.sample
         todo = [todo[int(i * step)] for i in range(a.sample)]
     with open(a.backup, "w", newline="", encoding="utf-8") as f:
@@ -387,6 +401,7 @@ def main():
     ap.add_argument("--write", action="store_true", help="WRITE filter.category/filter.subcategory to Shopify")
     ap.add_argument("--confirm", default="", help='must be exactly "WRITE" together with --write')
     ap.add_argument("--backup", default="st_backup_before_write.csv")
+    ap.add_argument("--ids", default="", help="comma-separated product ids: restrict write/preview to these")
     a = ap.parse_args()
 
     mt = Matcher(load_taxonomy())

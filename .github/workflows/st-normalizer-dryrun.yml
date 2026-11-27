@@ -14,6 +14,10 @@ on:
         type: choice
         options: [report-only, preview-20, write-20, write-all]
         default: report-only
+      ids:
+        description: "Optional: comma-separated product ids (limits preview/write to these)"
+        type: string
+        default: ""
       confirm:
         description: 'Type WRITE to allow write-20 / write-all'
         type: string
@@ -43,6 +47,7 @@ jobs:
             write-20)   EXTRA="--sample 20 --write --confirm ${{ github.event.inputs.confirm }}" ;;
             write-all)  EXTRA="--write --confirm ${{ github.event.inputs.confirm }}" ;;
           esac
+          if [ -n "${{ github.event.inputs.ids }}" ]; then EXTRA="$EXTRA --ids ${{ github.event.inputs.ids }}"; fi
           python3 st_normalizer.py --status "${{ github.event.inputs.status }}" --out st_normalizer_report.csv $EXTRA | tee summary.txt
       - uses: actions/upload-artifact@v4
         with:
